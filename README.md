@@ -218,7 +218,8 @@ terraform apply
 
 ### Stage 02: DynamoDB
 
-**Status**: 🔲 Not Started
+**Status**: ✅ Complete
+
 
 **What it creates**:
 - DynamoDB table for patient records
