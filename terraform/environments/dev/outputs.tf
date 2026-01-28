@@ -12,3 +12,13 @@ output "parameter_store_key_arn" {
   description = "ARN of the Parameter Store encryption key"
   value       = module.kms.parameter_store_key_arn
 }
+
+output "patient_records_table_name" {
+  description = "Name of the patient records DynamoDB table"
+  value       = module.dynamodb.table_name
+}
+
+output "patient_records_table_arn" {
+  description = "ARN of the patient records DynamoDB table"
+  value       = module.dynamodb.table_arn
+}
