@@ -60,17 +60,33 @@ This project demonstrates enterprise-grade AWS security architecture for healthc
 | **Monitoring Layer** | EventBridge | Security event detection |
 | **Monitoring Layer** | SNS | Alert notifications |
 
-### Data Flow
+### Data Flow: Create Patient Record
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API Gateway
+    participant Lambda
+    participant Parameter Store
+    participant KMS
+    participant Bedrock
+    participant DynamoDB
+    participant CloudTrail
 
-1. Client sends request to API Gateway
-2. API Gateway invokes Lambda function
-3. Lambda retrieves secrets from Parameter Store
-4. Lambda sends clinical notes to Bedrock for PII detection
-5. Lambda requests data key from KMS with encryption context
-6. Lambda encrypts patient data client-side
-7. Lambda stores encrypted data in DynamoDB
-8. CloudTrail logs all API calls to S3
-9. EventBridge monitors for security events and triggers SNS alerts
+    Client->>API Gateway: POST /patients
+    API Gateway->>Lambda: Invoke
+    Lambda->>Parameter Store: Get KMS Key ID
+    Parameter Store-->>Lambda: Key ID (decrypted)
+    Lambda->>Bedrock: Detect PII in notes
+    Bedrock-->>Lambda: Sanitized notes
+    Lambda->>KMS: GenerateDataKey (with encryption context)
+    KMS-->>Lambda: Data key
+    Lambda->>Lambda: Encrypt patient data
+    Lambda->>DynamoDB: PutItem (encrypted)
+    DynamoDB-->>Lambda: Success
+    Lambda-->>API Gateway: 200 OK
+    API Gateway-->>Client: Patient created
+    Note over CloudTrail: All API calls logged
+```
 
 ## Project Structure
 ```
@@ -191,6 +207,7 @@ terraform apply
 ```
 
 **Outputs**:
+
 | Output | Description |
 |--------|-------------|
 | `dynamodb_key_arn` | ARN of the DynamoDB encryption key |
@@ -382,7 +399,7 @@ aws dynamodb delete-table --table-name healthcare-terraform-lock
 **Jordan Bray** - Cloud Security Engineer
 
 [![GitHub](https://img.shields.io/badge/GitHub-jbray1992-181717?logo=github)](https://github.com/jbray1992)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-jordanbray-0A66C2?logo=linkedin)](https://www.linkedin.com/in/yourprofile/)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Jordan_Bray-0A66C2?logo=linkedin)](https://www.linkedin.com/in/jordan-bray-a2a83a113/)
 
 ## License
 
