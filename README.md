@@ -2,6 +2,11 @@
 
 HIPAA-compliant patient records management system with multi-layer encryption, AI-powered PII detection, and comprehensive audit logging.
 
+[![Terraform](https://img.shields.io/badge/Terraform-1.x-623CE4?logo=terraform&logoColor=white)](https://terraform.io)
+[![AWS](https://img.shields.io/badge/AWS-Cloud-FF9900?logo=amazon-aws&logoColor=white)](https://aws.amazon.com)
+[![HIPAA](https://img.shields.io/badge/HIPAA-Compliant-green)](docs/compliance.md)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -36,91 +41,36 @@ This project demonstrates enterprise-grade AWS security architecture for healthc
 - **Infrastructure as Code**: 100% Terraform with modular, reusable components
 
 ## Architecture
-```mermaid
-flowchart TB
-    subgraph Client
-        A[Healthcare Application]
-    end
 
-    subgraph API Layer
-        B[API Gateway]
-    end
+![Healthcare Security Platform Architecture](images/architecture.png)
 
-    subgraph Compute Layer
-        C[Lambda Functions]
-    end
+### Architecture Components
 
-    subgraph Security Layer
-        D[KMS - DynamoDB Key]
-        E[KMS - S3 Logs Key]
-        F[KMS - Parameter Store Key]
-        G[Parameter Store]
-    end
+| Layer | Component | Purpose |
+|-------|-----------|---------|
+| **API Layer** | API Gateway | REST API entry point with request validation |
+| **Compute Layer** | Lambda Functions | CRUD operations with client-side encryption |
+| **Data Layer** | DynamoDB | Patient records storage with server-side encryption |
+| **AI Layer** | Amazon Bedrock | PII detection and content filtering |
+| **Security Layer** | KMS (3 keys) | Customer-managed keys for DynamoDB, S3, Parameter Store |
+| **Security Layer** | Parameter Store | Encrypted secrets storage |
+| **Audit Layer** | CloudTrail | API call logging |
+| **Audit Layer** | S3 | Encrypted log storage |
+| **Audit Layer** | Athena | SQL queries for compliance reporting |
+| **Monitoring Layer** | EventBridge | Security event detection |
+| **Monitoring Layer** | SNS | Alert notifications |
 
-    subgraph Data Layer
-        H[DynamoDB - Patient Records]
-    end
+### Data Flow
 
-    subgraph AI Layer
-        I[Amazon Bedrock]
-        J[Bedrock Guardrails]
-    end
-
-    subgraph Audit Layer
-        K[CloudTrail]
-        L[S3 - Audit Logs]
-        M[Athena]
-    end
-
-    subgraph Monitoring Layer
-        N[EventBridge]
-        O[SNS Alerts]
-    end
-
-    A -->|HTTPS| B
-    B -->|Invoke| C
-    C -->|Encrypt/Decrypt| D
-    C -->|Get Secrets| G
-    G -.->|Encrypted by| F
-    C -->|Read/Write| H
-    H -.->|Encrypted by| D
-    C -->|PII Detection| I
-    I -->|Policy Check| J
-    C -->|API Calls| K
-    K -->|Store Logs| L
-    L -.->|Encrypted by| E
-    L -->|Query| M
-    K -->|Events| N
-    N -->|Alert| O
-```
-
-### Data Flow: Create Patient Record
-```mermaid
-sequenceDiagram
-    participant Client
-    participant API Gateway
-    participant Lambda
-    participant Parameter Store
-    participant KMS
-    participant Bedrock
-    participant DynamoDB
-    participant CloudTrail
-
-    Client->>API Gateway: POST /patients
-    API Gateway->>Lambda: Invoke
-    Lambda->>Parameter Store: Get KMS Key ID
-    Parameter Store-->>Lambda: Key ID (decrypted)
-    Lambda->>Bedrock: Detect PII in notes
-    Bedrock-->>Lambda: Sanitized notes
-    Lambda->>KMS: GenerateDataKey (with encryption context)
-    KMS-->>Lambda: Data key
-    Lambda->>Lambda: Encrypt patient data
-    Lambda->>DynamoDB: PutItem (encrypted)
-    DynamoDB-->>Lambda: Success
-    Lambda-->>API Gateway: 200 OK
-    API Gateway-->>Client: Patient created
-    Note over CloudTrail: All API calls logged
-```
+1. Client sends request to API Gateway
+2. API Gateway invokes Lambda function
+3. Lambda retrieves secrets from Parameter Store
+4. Lambda sends clinical notes to Bedrock for PII detection
+5. Lambda requests data key from KMS with encryption context
+6. Lambda encrypts patient data client-side
+7. Lambda stores encrypted data in DynamoDB
+8. CloudTrail logs all API calls to S3
+9. EventBridge monitors for security events and triggers SNS alerts
 
 ## Project Structure
 ```
@@ -143,18 +93,20 @@ healthcare-security-platform/
 │       ├── athena/               # Compliance queries
 │       └── monitoring/           # Alerts and dashboards
 ├── lambda-functions/             # Lambda source code
+├── images/                       # Architecture diagrams
 ├── docs/                         # Additional documentation
 └── scripts/                      # Deployment and utility scripts
 ```
 
 ## Prerequisites
 
-Before deploying this project, you need:
+### Required Tools
 
-1. **AWS Account** with administrator access
-2. **AWS CLI** configured with credentials
-3. **Terraform** version 1.5.0 or later
-4. **Git** for version control
+| Tool | Version | Installation |
+|------|---------|--------------|
+| Terraform | >= 1.5.0 | [Install Guide](https://terraform.io/downloads) |
+| AWS CLI | >= 2.0.0 | [Install Guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) |
+| Git | >= 2.30.0 | [Install Guide](https://git-scm.com/downloads) |
 
 ### AWS Account Setup
 
@@ -164,22 +116,6 @@ This project uses AWS Organizations with a dedicated member account:
 |---------|---------|
 | Management Account | AWS Organizations, billing, governance |
 | Healthcare-Security-Dev | All project resources |
-
-### Required Permissions
-
-The IAM user or role running Terraform needs permissions for:
-- KMS (create keys, manage policies)
-- DynamoDB (create tables)
-- Lambda (create functions)
-- API Gateway (create APIs)
-- S3 (create buckets)
-- CloudTrail (create trails)
-- Bedrock (invoke models, create guardrails)
-- IAM (create roles and policies)
-- SSM Parameter Store (create parameters)
-- SNS (create topics)
-- EventBridge (create rules)
-- Athena (create databases and workgroups)
 
 ## Deployment Guide
 
@@ -244,8 +180,7 @@ aws dynamodb create-table \
 - KMS key for Parameter Store secrets encryption
 - KMS aliases for each key
 
-**Files**: 
-- [terraform/modules/kms/](terraform/modules/kms/)
+**Files**: [terraform/modules/kms/](terraform/modules/kms/)
 
 **Deploy**:
 ```bash
@@ -256,9 +191,11 @@ terraform apply
 ```
 
 **Outputs**:
-- `dynamodb_key_arn` - ARN of the DynamoDB encryption key
-- `s3_logs_key_arn` - ARN of the S3 logs encryption key
-- `parameter_store_key_arn` - ARN of the Parameter Store encryption key
+| Output | Description |
+|--------|-------------|
+| `dynamodb_key_arn` | ARN of the DynamoDB encryption key |
+| `s3_logs_key_arn` | ARN of the S3 logs encryption key |
+| `parameter_store_key_arn` | ARN of the Parameter Store encryption key |
 
 ---
 
@@ -271,8 +208,7 @@ terraform apply
 - Server-side encryption with KMS
 - Point-in-time recovery enabled
 
-**Files**: 
-- [terraform/modules/dynamodb/](terraform/modules/dynamodb/)
+**Files**: [terraform/modules/dynamodb/](terraform/modules/dynamodb/)
 
 ---
 
@@ -284,8 +220,7 @@ terraform apply
 - SecureString parameters for secrets
 - KMS encryption for all parameters
 
-**Files**: 
-- [terraform/modules/parameter-store/](terraform/modules/parameter-store/)
+**Files**: [terraform/modules/parameter-store/](terraform/modules/parameter-store/)
 
 ---
 
@@ -298,9 +233,7 @@ terraform apply
 - Client-side encryption implementation
 - Bedrock integration for PII detection
 
-**Files**: 
-- [terraform/modules/lambda/](terraform/modules/lambda/)
-- [lambda-functions/](lambda-functions/)
+**Files**: [terraform/modules/lambda/](terraform/modules/lambda/) | [lambda-functions/](lambda-functions/)
 
 ---
 
@@ -313,8 +246,7 @@ terraform apply
 - Request validation
 - Lambda integrations
 
-**Files**: 
-- [terraform/modules/api-gateway/](terraform/modules/api-gateway/)
+**Files**: [terraform/modules/api-gateway/](terraform/modules/api-gateway/)
 
 ---
 
@@ -326,8 +258,7 @@ terraform apply
 - Bedrock Guardrails for PII filtering
 - IAM permissions for Bedrock access
 
-**Files**: 
-- [terraform/modules/bedrock/](terraform/modules/bedrock/)
+**Files**: [terraform/modules/bedrock/](terraform/modules/bedrock/)
 
 ---
 
@@ -340,9 +271,7 @@ terraform apply
 - CloudTrail trail with KMS encryption
 - S3 lifecycle policies
 
-**Files**: 
-- [terraform/modules/cloudtrail/](terraform/modules/cloudtrail/)
-- [terraform/modules/s3-logging/](terraform/modules/s3-logging/)
+**Files**: [terraform/modules/cloudtrail/](terraform/modules/cloudtrail/) | [terraform/modules/s3-logging/](terraform/modules/s3-logging/)
 
 ---
 
@@ -354,8 +283,7 @@ terraform apply
 - Athena database and workgroup
 - Saved queries for compliance reporting
 
-**Files**: 
-- [terraform/modules/athena/](terraform/modules/athena/)
+**Files**: [terraform/modules/athena/](terraform/modules/athena/)
 
 ---
 
@@ -368,8 +296,7 @@ terraform apply
 - EventBridge rules for threat detection
 - CloudWatch alarms
 
-**Files**: 
-- [terraform/modules/monitoring/](terraform/modules/monitoring/)
+**Files**: [terraform/modules/monitoring/](terraform/modules/monitoring/)
 
 ---
 
@@ -387,8 +314,8 @@ terraform apply
 ### Encryption Context
 
 Client-side encryption uses encryption context to bind ciphertext to specific patients:
-```python
-encryption_context = {
+```json
+{
     "patient_id": "P12345",
     "record_type": "medical"
 }
@@ -399,11 +326,14 @@ Decryption fails if the context does not match, providing cryptographic isolatio
 ### PII Detection
 
 Amazon Bedrock scans clinical notes for:
-- Social Security Numbers (blocked)
-- Credit card numbers (blocked)
-- Phone numbers (anonymized)
-- Email addresses (anonymized)
-- Physical addresses (anonymized)
+
+| PII Type | Action |
+|----------|--------|
+| Social Security Numbers | Blocked |
+| Credit card numbers | Blocked |
+| Phone numbers | Anonymized |
+| Email addresses | Anonymized |
+| Physical addresses | Anonymized |
 
 ### Audit Logging
 
@@ -412,11 +342,6 @@ CloudTrail captures all API calls including:
 - DynamoDB operations (GetItem, PutItem, Query)
 - Bedrock invocations
 - Parameter Store access
-
-Athena queries enable compliance reporting:
-- Who accessed which patient records
-- Failed decryption attempts
-- Guardrail violations
 
 ## Cost Estimate
 
@@ -442,7 +367,7 @@ cd terraform/environments/dev
 terraform destroy
 ```
 
-Note: The S3 bucket for Terraform state and DynamoDB lock table must be deleted manually since they were created outside of Terraform.
+The S3 bucket for Terraform state and DynamoDB lock table must be deleted manually:
 ```bash
 # Empty and delete state bucket
 aws s3 rm s3://healthcare-tfstate-<ACCOUNT_ID> --recursive
@@ -452,10 +377,13 @@ aws s3 rb s3://healthcare-tfstate-<ACCOUNT_ID>
 aws dynamodb delete-table --table-name healthcare-terraform-lock
 ```
 
-## License
-
-MIT License - See [LICENSE](LICENSE) for details.
-
 ## Author
 
-Jordan Bray - [GitHub](https://github.com/jbray1992) | [LinkedIn](https://www.linkedin.com/in/jordanbray1992/)
+**Jordan Bray** - Cloud Security Engineer
+
+[![GitHub](https://img.shields.io/badge/GitHub-jbray1992-181717?logo=github)](https://github.com/jbray1992)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-jordanbray-0A66C2?logo=linkedin)](https://www.linkedin.com/in/yourprofile/)
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
