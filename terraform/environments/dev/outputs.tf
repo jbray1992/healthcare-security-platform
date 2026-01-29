@@ -22,3 +22,8 @@ output "patient_records_table_arn" {
   description = "ARN of the patient records DynamoDB table"
   value       = module.dynamodb.table_arn
 }
+
+output "dynamodb_kms_key_parameter_name" {
+  description = "Name of the parameter storing DynamoDB KMS key ID"
+  value       = module.parameter_store.dynamodb_kms_key_parameter_name
+}

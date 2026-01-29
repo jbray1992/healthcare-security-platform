@@ -1,0 +1,19 @@
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "project" {
+  description = "Project name"
+  type        = string
+}
+
+variable "kms_key_arn" {
+  description = "ARN of the KMS key for encryption"
+  type        = string
+}
+
+variable "dynamodb_key_id" {
+  description = "ID of the KMS key for DynamoDB encryption"
+  type        = string
+}
