@@ -47,3 +47,13 @@ output "api_endpoint" {
   description = "API Gateway endpoint URL"
   value       = module.api_gateway.api_endpoint
 }
+
+output "cloudtrail_bucket" {
+  description = "S3 bucket for CloudTrail logs"
+  value       = module.cloudtrail.s3_bucket_name
+}
+
+output "cloudtrail_trail_arn" {
+  description = "ARN of the CloudTrail trail"
+  value       = module.cloudtrail.trail_arn
+}

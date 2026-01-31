@@ -47,3 +47,10 @@ module "api_gateway" {
   lambda_function_arn  = module.lambda.function_arn
   lambda_invoke_arn    = module.lambda.function_invoke_arn
 }
+
+module "cloudtrail" {
+  source      = "../../modules/cloudtrail"
+  environment = "dev"
+  project     = "healthcare-security-platform"
+  kms_key_arn = module.kms.s3_logs_key_arn
+}
