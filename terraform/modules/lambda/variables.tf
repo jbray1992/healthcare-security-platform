@@ -37,3 +37,13 @@ variable "kms_key_parameter_arn" {
   description = "ARN of the Parameter Store parameter"
   type        = string
 }
+
+variable "guardrail_id" {
+  description = "ID of the Bedrock Guardrail"
+  type        = string
+}
+
+variable "guardrail_version" {
+  description = "Version of the Bedrock Guardrail"
+  type        = string
+}

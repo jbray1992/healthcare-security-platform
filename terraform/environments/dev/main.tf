@@ -19,6 +19,12 @@ module "parameter_store" {
   dynamodb_key_id = module.kms.dynamodb_key_id
 }
 
+module "bedrock" {
+  source      = "../../modules/bedrock"
+  environment = "dev"
+  project     = "healthcare-security-platform"
+}
+
 module "lambda" {
   source                  = "../../modules/lambda"
   environment             = "dev"
@@ -29,6 +35,8 @@ module "lambda" {
   parameter_store_key_arn = module.kms.parameter_store_key_arn
   kms_key_parameter_name  = module.parameter_store.dynamodb_kms_key_parameter_name
   kms_key_parameter_arn   = module.parameter_store.dynamodb_kms_key_parameter_arn
+  guardrail_id            = module.bedrock.guardrail_id
+  guardrail_version       = module.bedrock.guardrail_version
 }
 
 module "api_gateway" {

@@ -9,10 +9,13 @@ from botocore.exceptions import ClientError
 dynamodb = boto3.resource('dynamodb')
 kms = boto3.client('kms')
 ssm = boto3.client('ssm')
+bedrock_runtime = boto3.client('bedrock-runtime')
 
 # Get environment variables
 TABLE_NAME = os.environ.get('TABLE_NAME')
 KMS_KEY_PARAMETER = os.environ.get('KMS_KEY_PARAMETER')
+GUARDRAIL_ID = os.environ.get('GUARDRAIL_ID')
+GUARDRAIL_VERSION = os.environ.get('GUARDRAIL_VERSION')
 
 # Cache for KMS key ID
 _kms_key_id = None
@@ -27,6 +30,41 @@ def get_kms_key_id():
         )
         _kms_key_id = response['Parameter']['Value']
     return _kms_key_id
+
+def apply_guardrail(text):
+    """Apply Bedrock Guardrail to detect and filter PII"""
+    if not text or not GUARDRAIL_ID:
+        return text, False
+    
+    try:
+        response = bedrock_runtime.apply_guardrail(
+            guardrailIdentifier=GUARDRAIL_ID,
+            guardrailVersion=GUARDRAIL_VERSION,
+            source='INPUT',
+            content=[
+                {
+                    'text': {
+                        'text': text
+                    }
+                }
+            ]
+        )
+        
+        action = response.get('action', 'NONE')
+        
+        if action == 'GUARDRAIL_INTERVENED':
+            # Get the filtered output
+            outputs = response.get('outputs', [])
+            if outputs:
+                filtered_text = outputs[0].get('text', text)
+                return filtered_text, True
+            return text, True
+        
+        return text, False
+        
+    except ClientError as e:
+        print(f"Guardrail error: {e}")
+        return text, False
 
 def encrypt_field(plaintext, patient_id, record_type):
     """Encrypt a field using KMS with encryption context"""
@@ -76,8 +114,16 @@ def create_patient(event):
             'body': json.dumps({'error': 'patient_id is required'})
         }
     
-    # Encrypt sensitive fields
+    # Apply guardrail to clinical notes if present
     sensitive_data = body.get('sensitive_data', {})
+    pii_detected = False
+    
+    if 'clinical_notes' in sensitive_data:
+        filtered_notes, was_filtered = apply_guardrail(sensitive_data['clinical_notes'])
+        sensitive_data['clinical_notes'] = filtered_notes
+        pii_detected = was_filtered
+    
+    # Encrypt sensitive fields
     encrypted_data = {}
     
     for key, value in sensitive_data.items():
@@ -91,19 +137,25 @@ def create_patient(event):
         'RecordType': record_type,
         'EncryptedData': encrypted_data,
         'NonSensitiveData': body.get('non_sensitive_data', {}),
+        'PIIFiltered': pii_detected,
         'CreatedAt': datetime.utcnow().isoformat(),
         'UpdatedAt': datetime.utcnow().isoformat()
     }
     
     table.put_item(Item=item)
     
+    response_body = {
+        'message': 'Patient record created',
+        'patient_id': patient_id,
+        'record_type': record_type
+    }
+    
+    if pii_detected:
+        response_body['warning'] = 'PII was detected and filtered from clinical notes'
+    
     return {
         'statusCode': 201,
-        'body': json.dumps({
-            'message': 'Patient record created',
-            'patient_id': patient_id,
-            'record_type': record_type
-        })
+        'body': json.dumps(response_body)
     }
 
 def get_patient(event):
@@ -161,6 +213,7 @@ def get_patient(event):
             'record_type': record_type,
             'sensitive_data': decrypted_data,
             'non_sensitive_data': item.get('NonSensitiveData', {}),
+            'pii_filtered': item.get('PIIFiltered', False),
             'created_at': item.get('CreatedAt'),
             'updated_at': item.get('UpdatedAt')
         })

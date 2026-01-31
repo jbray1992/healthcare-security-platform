@@ -75,6 +75,15 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "kms:Decrypt"
         ]
         Resource = var.parameter_store_key_arn
+      },
+      {
+        Sid    = "BedrockAccess"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:ApplyGuardrail"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -100,8 +109,10 @@ resource "aws_lambda_function" "patient_records" {
 
   environment {
     variables = {
-      TABLE_NAME        = var.dynamodb_table_name
-      KMS_KEY_PARAMETER = var.kms_key_parameter_name
+      TABLE_NAME         = var.dynamodb_table_name
+      KMS_KEY_PARAMETER  = var.kms_key_parameter_name
+      GUARDRAIL_ID       = var.guardrail_id
+      GUARDRAIL_VERSION  = var.guardrail_version
     }
   }
 
