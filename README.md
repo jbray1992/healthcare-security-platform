@@ -257,7 +257,7 @@ terraform apply
 
 ### Stage 05: API Gateway
 
-**Status**: 🔲 Not Started
+**Status**: ✅ Complete
 
 **What it creates**:
 - REST API with resource policies
