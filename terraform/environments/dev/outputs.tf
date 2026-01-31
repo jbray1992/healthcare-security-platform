@@ -42,3 +42,8 @@ output "lambda_invoke_arn" {
   description = "Invoke ARN of the patient records Lambda function"
   value       = module.lambda.function_invoke_arn
 }
+
+output "api_endpoint" {
+  description = "API Gateway endpoint URL"
+  value       = module.api_gateway.api_endpoint
+}

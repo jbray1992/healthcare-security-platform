@@ -30,3 +30,12 @@ module "lambda" {
   kms_key_parameter_name  = module.parameter_store.dynamodb_kms_key_parameter_name
   kms_key_parameter_arn   = module.parameter_store.dynamodb_kms_key_parameter_arn
 }
+
+module "api_gateway" {
+  source               = "../../modules/api-gateway"
+  environment          = "dev"
+  project              = "healthcare-security-platform"
+  lambda_function_name = module.lambda.function_name
+  lambda_function_arn  = module.lambda.function_arn
+  lambda_invoke_arn    = module.lambda.function_invoke_arn
+}
