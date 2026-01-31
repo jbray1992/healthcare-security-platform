@@ -27,3 +27,18 @@ output "dynamodb_kms_key_parameter_name" {
   description = "Name of the parameter storing DynamoDB KMS key ID"
   value       = module.parameter_store.dynamodb_kms_key_parameter_name
 }
+
+output "lambda_function_name" {
+  description = "Name of the patient records Lambda function"
+  value       = module.lambda.function_name
+}
+
+output "lambda_function_arn" {
+  description = "ARN of the patient records Lambda function"
+  value       = module.lambda.function_arn
+}
+
+output "lambda_invoke_arn" {
+  description = "Invoke ARN of the patient records Lambda function"
+  value       = module.lambda.function_invoke_arn
+}
