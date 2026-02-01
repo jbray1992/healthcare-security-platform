@@ -89,7 +89,7 @@ sequenceDiagram
 ```
 
 ## Project Structure
-```
+````
 healthcare-security-platform/
 ├── terraform/
 │   ├── environments/
@@ -103,15 +103,18 @@ healthcare-security-platform/
 │       ├── parameter-store/      # Secrets management
 │       ├── lambda/               # Lambda functions
 │       ├── api-gateway/          # REST API
-│       ├── bedrock/              # AI integration
-│       ├── cloudtrail/           # Audit logging
-│       ├── s3-logging/           # Log storage
+│       ├── bedrock/              # PII detection guardrails
+│       ├── cloudtrail/           # Audit logging with S3 storage
 │       ├── athena/               # Compliance queries
-│       └── monitoring/           # Alerts and dashboards
-├── lambda-functions/             # Lambda source code
-├── images/                       # Architecture diagrams
-├── docs/                         # Additional documentation
-└── scripts/                      # Deployment and utility scripts
+│       └── monitoring/           # EventBridge rules and SNS alerts
+├── lambda-functions/
+│   └── patient-records/          # Python Lambda source code
+│       └── index.py
+├── images/
+│   └── architecture.png          # Architecture diagram
+├── README.md
+├── LICENSE
+└── .gitignore
 ```
 
 ## Prerequisites
