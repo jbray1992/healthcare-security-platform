@@ -54,3 +54,10 @@ module "cloudtrail" {
   project     = "healthcare-security-platform"
   kms_key_arn = module.kms.s3_logs_key_arn
 }
+
+module "athena" {
+  source                 = "../../modules/athena"
+  environment            = "dev"
+  project                = "healthcare-security-platform"
+  cloudtrail_bucket_name = module.cloudtrail.s3_bucket_name
+}

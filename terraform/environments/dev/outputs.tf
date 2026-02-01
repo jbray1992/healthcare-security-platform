@@ -57,3 +57,13 @@ output "cloudtrail_trail_arn" {
   description = "ARN of the CloudTrail trail"
   value       = module.cloudtrail.trail_arn
 }
+
+output "athena_workgroup" {
+  description = "Athena workgroup for compliance queries"
+  value       = module.athena.workgroup_name
+}
+
+output "athena_database" {
+  description = "Glue database for CloudTrail logs"
+  value       = module.athena.database_name
+}
