@@ -295,7 +295,7 @@ terraform apply
 
 ### Stage 08: Athena
 
-**Status**: 🔲 Not Started
+**Status**: ✅ Complete
 
 **What it creates**:
 - Athena database and workgroup

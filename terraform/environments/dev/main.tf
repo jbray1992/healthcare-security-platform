@@ -61,3 +61,10 @@ module "athena" {
   project                = "healthcare-security-platform"
   cloudtrail_bucket_name = module.cloudtrail.s3_bucket_name
 }
+
+module "monitoring" {
+  source      = "../../modules/monitoring"
+  environment = "dev"
+  project     = "healthcare-security-platform"
+  alert_email = ""
+}

@@ -67,3 +67,8 @@ output "athena_database" {
   description = "Glue database for CloudTrail logs"
   value       = module.athena.database_name
 }
+
+output "sns_topic_arn" {
+  description = "SNS topic for security alerts"
+  value       = module.monitoring.sns_topic_arn
+}
