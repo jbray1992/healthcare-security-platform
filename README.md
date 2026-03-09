@@ -89,7 +89,7 @@ sequenceDiagram
 ```
 
 ## Project Structure
-````
+```
 healthcare-security-platform/
 ├── terraform/
 │   ├── environments/
