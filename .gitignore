@@ -35,3 +35,9 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+terraform/modules/lambda/build/
+terraform/modules/lambda/lambda-function.zip
+__pycache__/
+*.pyc
+plan-output.txt
+tfplan

@@ -89,11 +89,40 @@ resource "aws_iam_role_policy" "lambda_policy" {
   })
 }
 
-# Zip the Lambda function
+# Build directory: copy source + install deps into a clean staging dir
+resource "null_resource" "lambda_build" {
+  triggers = {
+    source_hash       = filemd5("${path.module}/../../../lambda-functions/patient-records/index.py")
+    requirements_hash = filemd5("${path.module}/../../../lambda-functions/patient-records/requirements.txt")
+  }
+
+  provisioner "local-exec" {
+    command = <<EOT
+      set -e
+      BUILD_DIR="${path.module}/build"
+      SRC_DIR="${path.module}/../../../lambda-functions/patient-records"
+      rm -rf "$BUILD_DIR"
+      mkdir -p "$BUILD_DIR"
+      cp "$SRC_DIR/index.py" "$BUILD_DIR/"
+      pip install \
+        --platform manylinux2014_x86_64 \
+        --target "$BUILD_DIR" \
+        --implementation cp \
+        --python-version 3.12 \
+        --only-binary=:all: \
+        --upgrade \
+        -r "$SRC_DIR/requirements.txt"
+    EOT
+  }
+}
+
+# Zip the built Lambda directory
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_dir  = "${path.module}/../../../lambda-functions/patient-records"
+  source_dir  = "${path.module}/build"
   output_path = "${path.module}/lambda-function.zip"
+
+  depends_on = [null_resource.lambda_build]
 }
 
 # Lambda Function
@@ -109,16 +138,16 @@ resource "aws_lambda_function" "patient_records" {
 
   environment {
     variables = {
-      TABLE_NAME         = var.dynamodb_table_name
-      KMS_KEY_PARAMETER  = var.kms_key_parameter_name
-      GUARDRAIL_ID       = var.guardrail_id
-      GUARDRAIL_VERSION  = var.guardrail_version
+      TABLE_NAME        = var.dynamodb_table_name
+      KMS_KEY_PARAMETER = var.kms_key_parameter_name
+      GUARDRAIL_ID      = var.guardrail_id
+      GUARDRAIL_VERSION = var.guardrail_version
     }
   }
 
   tags = {
     Name    = "${var.project}-patient-records"
-    Purpose = "CRUD operations for patient records with client-side encryption"
+    Purpose = "CRUD operations for patient records with envelope encryption"
   }
 }
 
