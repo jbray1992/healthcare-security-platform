@@ -114,6 +114,7 @@ resource "aws_cloudtrail" "main" {
   include_global_service_events = true
   is_multi_region_trail         = false
   enable_logging                = true
+  enable_log_file_validation    = true
   kms_key_id                    = var.kms_key_arn
 
   event_selector {

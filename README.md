@@ -4,7 +4,7 @@ HIPAA-compliant patient records management system with multi-layer encryption, A
 
 [![Terraform](https://img.shields.io/badge/Terraform-1.x-623CE4?logo=terraform&logoColor=white)](https://terraform.io)
 [![AWS](https://img.shields.io/badge/AWS-Cloud-FF9900?logo=amazon-aws&logoColor=white)](https://aws.amazon.com)
-[![HIPAA](https://img.shields.io/badge/HIPAA-Compliant-green)](docs/compliance.md)
+[![HIPAA](https://img.shields.io/badge/HIPAA-Compliant-green)](#security-features)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Table of Contents
@@ -49,7 +49,7 @@ This project demonstrates enterprise-grade AWS security architecture for healthc
 | Layer | Component | Purpose |
 |-------|-----------|---------|
 | **API Layer** | API Gateway | REST API entry point with request validation |
-| **Compute Layer** | Lambda Functions | CRUD operations with client-side encryption |
+| **Compute Layer** | Lambda Functions | CRUD operations with envelope encryption (KMS data keys + AES-256-GCM) |
 | **Data Layer** | DynamoDB | Patient records storage with server-side encryption |
 | **AI Layer** | Amazon Bedrock | PII detection and content filtering |
 | **Security Layer** | KMS (3 keys) | Customer-managed keys for DynamoDB, S3, Parameter Store |
@@ -250,9 +250,11 @@ terraform apply
 **Status**: ✅ Complete
 
 **What it creates**:
-- Lambda functions for CRUD operations
-- Client-side encryption implementation
-- Bedrock integration for PII detection
+- Lambda functions for CRUD operations on patient records
+- Envelope encryption (KMS `GenerateDataKey` + local AES-256-GCM) for per-field client-side encryption
+- Encryption context binding ciphertext to `patient_id` and `record_type` for cryptographic patient isolation
+- Bedrock guardrail integration for PII detection in clinical notes
+- Python `cryptography` library packaged with the deployment artifact
 
 **Files**: [terraform/modules/lambda/](terraform/modules/lambda/) | [lambda-functions/](lambda-functions/)
 
@@ -292,7 +294,7 @@ terraform apply
 - CloudTrail trail with KMS encryption
 - S3 lifecycle policies
 
-**Files**: [terraform/modules/cloudtrail/](terraform/modules/cloudtrail/) | [terraform/modules/s3-logging/](terraform/modules/s3-logging/)
+**Files**: [terraform/modules/cloudtrail/](terraform/modules/cloudtrail/)
 
 ---
 
@@ -327,7 +329,8 @@ terraform apply
 
 | Layer | Method | Key Type |
 |-------|--------|----------|
-| Data at rest (DynamoDB) | Server-side + Client-side | Customer managed KMS |
+| Data at rest (DynamoDB, server-side) | AWS-managed encryption with customer KMS key | Customer managed KMS |
+| Data at rest (DynamoDB, application layer) | Envelope encryption: KMS-issued AES-256 data keys, local AES-256-GCM per field | Customer managed KMS |
 | Data at rest (S3) | Server-side | Customer managed KMS |
 | Data at rest (Parameter Store) | Server-side | Customer managed KMS |
 | Data in transit | TLS 1.2+ | AWS managed |
@@ -352,9 +355,11 @@ Amazon Bedrock scans clinical notes for:
 |----------|--------|
 | Social Security Numbers | Blocked |
 | Credit card numbers | Blocked |
+| Names | Anonymized |
 | Phone numbers | Anonymized |
 | Email addresses | Anonymized |
 | Physical addresses | Anonymized |
+| US Individual Tax Identification Numbers | Anonymized |
 
 ### Audit Logging
 

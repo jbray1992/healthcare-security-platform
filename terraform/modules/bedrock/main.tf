@@ -28,6 +28,10 @@ resource "aws_bedrock_guardrail" "pii_filter" {
     }
     pii_entities_config {
       action = "ANONYMIZE"
+      type   = "ADDRESS"
+    }
+    pii_entities_config {
+      action = "ANONYMIZE"
       type   = "US_INDIVIDUAL_TAX_IDENTIFICATION_NUMBER"
     }
   }

@@ -40,4 +40,4 @@ terraform/modules/lambda/lambda-function.zip
 __pycache__/
 *.pyc
 plan-output.txt
-tfplan
+tfplan*
