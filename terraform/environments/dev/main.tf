@@ -66,5 +66,5 @@ module "monitoring" {
   source      = "../../modules/monitoring"
   environment = "dev"
   project     = "healthcare-security-platform"
-  alert_email = ""
+  alert_email = var.alert_email
 }

@@ -35,7 +35,7 @@ This project demonstrates enterprise-grade AWS security architecture for healthc
 ### Key Features
 
 - **Multi-layer encryption**: Client-side encryption with KMS customer-managed keys and encryption context for per-patient data isolation
-- **AI-powered security**: Amazon Bedrock with Claude for PII detection and Guardrails for policy enforcement
+- **AI-powered security**: Amazon Bedrock Guardrails for probabilistic PII detection and policy enforcement on patient clinical notes
 - **Comprehensive audit trail**: CloudTrail logging to S3 with Athena queries for compliance reporting
 - **Real-time threat detection**: EventBridge rules triggering SNS alerts for security events
 - **Infrastructure as Code**: 100% Terraform with modular, reusable components
@@ -48,7 +48,7 @@ This project demonstrates enterprise-grade AWS security architecture for healthc
 
 | Layer | Component | Purpose |
 |-------|-----------|---------|
-| **API Layer** | API Gateway | REST API entry point with request validation |
+| **API Layer** | API Gateway | REST API with API key authentication, JSON schema request validation, and per-key usage throttling |
 | **Compute Layer** | Lambda Functions | CRUD operations with envelope encryption (KMS data keys + AES-256-GCM) |
 | **Data Layer** | DynamoDB | Patient records storage with server-side encryption |
 | **AI Layer** | Amazon Bedrock | PII detection and content filtering |
@@ -238,8 +238,8 @@ terraform apply
 **Status**: ✅ Complete
 
 **What it creates**:
-- SecureString parameters for secrets
-- KMS encryption for all parameters
+- SecureString parameter for the DynamoDB KMS key ID
+- KMS-encrypted at rest using a dedicated customer-managed key
 
 **Files**: [terraform/modules/parameter-store/](terraform/modules/parameter-store/)
 
@@ -265,9 +265,12 @@ terraform apply
 **Status**: ✅ Complete
 
 **What it creates**:
-- REST API with resource policies
-- Request validation
-- Lambda integrations
+- REST API with three routes: POST /patients, GET /patients/{patient_id}, DELETE /patients/{patient_id}
+- API key authentication required on all methods (`api_key_required = true`)
+- Request body validation against a JSON schema (rejects malformed payloads at the gateway, before Lambda)
+- Path parameter validation on GET and DELETE routes
+- Throttling via usage plan: 10 req/s rate, 20 req/s burst, 10,000 req/month quota
+- Lambda integrations (AWS_PROXY)
 
 **Files**: [terraform/modules/api-gateway/](terraform/modules/api-gateway/)
 
@@ -315,13 +318,62 @@ terraform apply
 **Status**: ✅ Complete
 
 **What it creates**:
-- SNS topic for security alerts
-- EventBridge rules for threat detection
-- CloudWatch alarms
+- SNS topic for security alerts (requires `alert_email` variable to receive notifications)
+- EventBridge rules for: KMS key deletion, IAM policy changes, unauthorized API calls (AccessDenied), root account console sign-in
+- CloudWatch alarms for: Lambda errors, API Gateway 4xx error rate, API Gateway 5xx errors
+
+> **Note:** Provide your email in `terraform.tfvars` as `alert_email = "you@example.com"`. After `terraform apply`, AWS will send an SNS subscription confirmation email — click the link to start receiving alerts.
 
 **Files**: [terraform/modules/monitoring/](terraform/modules/monitoring/)
 
 ---
+
+## Usage
+
+After `terraform apply`, the API requires an API key on every request. Retrieve outputs and the key value:
+
+```bash
+cd terraform/environments/dev
+
+# Get the API endpoint and key ID
+API_ENDPOINT=$(terraform output -raw api_endpoint)
+API_KEY_ID=$(terraform output -raw api_key_id)
+
+# Fetch the actual key value (sensitive — do not log or commit)
+API_KEY=$(aws apigateway get-api-key --api-key "$API_KEY_ID" --include-value --query value --output text)
+```
+
+### Create a patient record
+
+```bash
+curl -X POST "$API_ENDPOINT/patients" \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{
+    "patient_id": "P12345",
+    "record_type": "DEMOGRAPHICS",
+    "sensitive_data": {
+      "ssn": "999-99-9999",
+      "diagnosis": "Hypertension"
+    }
+  }'
+```
+
+### Retrieve a patient record
+
+```bash
+curl "$API_ENDPOINT/patients/P12345?record_type=DEMOGRAPHICS" \
+  -H "x-api-key: $API_KEY"
+```
+
+### Delete a patient record
+
+```bash
+curl -X DELETE "$API_ENDPOINT/patients/P12345?record_type=DEMOGRAPHICS" \
+  -H "x-api-key: $API_KEY"
+```
+
+Requests without a valid `x-api-key` header receive HTTP 403. Malformed request bodies (missing `patient_id`, invalid characters, wrong types) are rejected at the API Gateway layer with HTTP 400 before reaching the Lambda function.
 
 ## Security Features
 

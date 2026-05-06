@@ -188,3 +188,68 @@ resource "aws_glue_catalog_table" "cloudtrail_logs" {
     type = "string"
   }
 }
+
+# Named query: failed access attempts in last 7 days
+resource "aws_athena_named_query" "failed_access_attempts" {
+  name        = "${var.project}-failed-access-attempts-7d"
+  workgroup   = aws_athena_workgroup.main.id
+  database    = aws_glue_catalog_database.cloudtrail.name
+  description = "All access denied / unauthorized events in the last 7 days"
+
+  query = <<-SQL
+    SELECT
+      eventtime,
+      eventname,
+      eventsource,
+      errorcode,
+      errormessage,
+      useridentity.arn AS principal,
+      sourceipaddress
+    FROM "${replace("${var.project}-cloudtrail-db", "-", "_")}"."cloudtrail_logs"
+    WHERE date >= date_format(date_add('day', -7, current_date), '%Y/%m/%d')
+      AND errorcode IN ('AccessDenied', 'UnauthorizedAccess', 'AccessDeniedException')
+    ORDER BY eventtime DESC
+  SQL
+}
+
+resource "aws_athena_named_query" "kms_decrypt_by_patient" {
+  name        = "${var.project}-kms-decrypt-by-patient"
+  workgroup   = aws_athena_workgroup.main.id
+  database    = aws_glue_catalog_database.cloudtrail.name
+  description = "KMS Decrypt operations grouped by patient_id for compliance audit"
+
+  query = <<-SQL
+    SELECT
+      json_extract_scalar(requestparameters, '$.encryptionContext.patient_id') AS patient_id,
+      COUNT(*) AS decrypt_count,
+      MIN(eventtime) AS first_decrypt,
+      MAX(eventtime) AS last_decrypt
+    FROM "${replace("${var.project}-cloudtrail-db", "-", "_")}"."cloudtrail_logs"
+    WHERE eventsource = 'kms.amazonaws.com'
+      AND eventname = 'Decrypt'
+      AND date >= date_format(date_add('day', -30, current_date), '%Y/%m/%d')
+      AND json_extract_scalar(requestparameters, '$.encryptionContext.patient_id') IS NOT NULL
+    GROUP BY json_extract_scalar(requestparameters, '$.encryptionContext.patient_id')
+    ORDER BY decrypt_count DESC
+  SQL
+}
+
+resource "aws_athena_named_query" "root_account_usage" {
+  name        = "${var.project}-root-account-usage"
+  workgroup   = aws_athena_workgroup.main.id
+  database    = aws_glue_catalog_database.cloudtrail.name
+  description = "All actions performed by the root account (should always be empty in compliant environments)"
+
+  query = <<-SQL
+    SELECT
+      eventtime,
+      eventname,
+      eventsource,
+      sourceipaddress,
+      useragent
+    FROM "${replace("${var.project}-cloudtrail-db", "-", "_")}"."cloudtrail_logs"
+    WHERE useridentity.type = 'Root'
+      AND date >= date_format(date_add('day', -30, current_date), '%Y/%m/%d')
+    ORDER BY eventtime DESC
+  SQL
+}

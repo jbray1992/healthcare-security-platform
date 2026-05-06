@@ -72,3 +72,8 @@ output "sns_topic_arn" {
   description = "SNS topic for security alerts"
   value       = module.monitoring.sns_topic_arn
 }
+
+output "api_key_id" {
+  description = "ID of the API key — retrieve value with: aws apigateway get-api-key --api-key <id> --include-value --query value --output text"
+  value       = module.api_gateway.api_key_id
+}
