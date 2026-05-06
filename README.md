@@ -1,10 +1,10 @@
 # Healthcare Security Platform
 
-HIPAA-compliant patient records management system with multi-layer encryption, AI-powered PII detection, and comprehensive audit logging.
+Patient records management system implementing HIPAA-aligned technical safeguards: multi-layer encryption, AI-powered PII detection, and comprehensive audit logging. (Technical implementation only — actual HIPAA compliance also requires a signed BAA, administrative and physical safeguards, and a third-party audit.)
 
 [![Terraform](https://img.shields.io/badge/Terraform-1.x-623CE4?logo=terraform&logoColor=white)](https://terraform.io)
 [![AWS](https://img.shields.io/badge/AWS-Cloud-FF9900?logo=amazon-aws&logoColor=white)](https://aws.amazon.com)
-[![HIPAA](https://img.shields.io/badge/HIPAA-Compliant-green)](#security-features)
+[![HIPAA](https://img.shields.io/badge/HIPAA-Technical_Safeguards-blue)](#security-features)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Table of Contents
@@ -37,7 +37,7 @@ This project demonstrates enterprise-grade AWS security architecture for healthc
 - **Multi-layer encryption**: Client-side encryption with KMS customer-managed keys and encryption context for per-patient data isolation
 - **AI-powered security**: Amazon Bedrock Guardrails for probabilistic PII detection and policy enforcement on patient clinical notes
 - **Comprehensive audit trail**: CloudTrail logging to S3 with Athena queries for compliance reporting
-- **Real-time threat detection**: EventBridge rules triggering SNS alerts for security events
+- **Near-real-time security event notification**: EventBridge rules triggering SNS email alerts on KMS key deletion, IAM policy changes, AccessDenied errors, and root account sign-in
 - **Infrastructure as Code**: 100% Terraform with modular, reusable components
 
 ## Architecture
@@ -76,9 +76,11 @@ sequenceDiagram
     API Gateway->>Lambda: Invoke
     Lambda->>Parameter Store: Get KMS Key ID
     Parameter Store-->>Lambda: Key ID (decrypted)
-    Lambda->>Bedrock: Detect PII in notes
-    Bedrock-->>Lambda: Sanitized notes
-    Lambda->>KMS: GenerateDataKey (with encryption context)
+    opt Clinical notes present
+        Lambda->>Bedrock: ApplyGuardrail on notes
+        Bedrock-->>Lambda: Sanitized notes
+    end
+    Lambda->>KMS: GenerateDataKey (per field, with encryption context)
     KMS-->>Lambda: Data key
     Lambda->>Lambda: Encrypt patient data
     Lambda->>DynamoDB: PutItem (encrypted)
@@ -94,22 +96,25 @@ healthcare-security-platform/
 ├── terraform/
 │   ├── environments/
 │   │   └── dev/
-│   │       ├── providers.tf      # AWS provider and S3 backend
-│   │       ├── main.tf           # Module calls
-│   │       └── outputs.tf        # Environment outputs
+│   │       ├── providers.tf            # AWS provider and S3 backend
+│   │       ├── main.tf                 # Module calls
+│   │       ├── variables.tf            # Input variables (e.g., alert_email)
+│   │       ├── outputs.tf              # Environment outputs
+│   │       └── terraform.tfvars.example # Template for required variables
 │   └── modules/
-│       ├── kms/                  # KMS keys for encryption
-│       ├── dynamodb/             # Patient records table
-│       ├── parameter-store/      # Secrets management
-│       ├── lambda/               # Lambda functions
-│       ├── api-gateway/          # REST API
-│       ├── bedrock/              # PII detection guardrails
-│       ├── cloudtrail/           # Audit logging with S3 storage
-│       ├── athena/               # Compliance queries
-│       └── monitoring/           # EventBridge rules and SNS alerts
+│       ├── kms/                  # KMS keys with rotation enabled
+│       ├── dynamodb/             # Patient records table with PITR + SSE-KMS
+│       ├── parameter-store/      # SecureString parameter for KMS key ID
+│       ├── lambda/               # Envelope-encryption Lambda + build pipeline
+│       ├── api-gateway/          # REST API with API key auth, validation, throttling
+│       ├── bedrock/              # PII detection guardrail (7 entity types)
+│       ├── cloudtrail/           # Audit trail with KMS encryption + log validation
+│       ├── athena/               # Workgroup, Glue table, named compliance queries
+│       └── monitoring/           # EventBridge rules, SNS topic, CloudWatch alarms
 ├── lambda-functions/
-│   └── patient-records/          # Python Lambda source code
-│       └── index.py
+│   └── patient-records/
+│       ├── index.py              # Handler: encrypt/decrypt, guardrail, CRUD
+│       └── requirements.txt      # Python dependencies (cryptography)
 ├── images/
 │   └── architecture.png          # Architecture diagram
 ├── README.md
@@ -129,12 +134,14 @@ healthcare-security-platform/
 
 ### AWS Account Setup
 
-This project uses AWS Organizations with a dedicated member account:
+This project deploys into a single AWS account. The recommended pattern is an AWS Organizations member account dedicated to the workload, with the management account reserved for billing and governance:
 
 | Account | Purpose |
 |---------|---------|
-| Management Account | AWS Organizations, billing, governance |
-| Healthcare-Security-Dev | All project resources |
+| Management Account | AWS Organizations, billing, IAM Identity Center, governance |
+| Workload Account (e.g., `Healthcare-Security-Dev`) | All resources for this project — KMS, DynamoDB, Lambda, API Gateway, etc. |
+
+The example commands assume credentials for the workload account. If using cross-account role assumption from the management account, set `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN` from `aws sts assume-role` output.
 
 ## Deployment Guide
 
@@ -175,6 +182,22 @@ aws dynamodb create-table \
 
 3. Update the backend configuration in `terraform/environments/dev/providers.tf` with your bucket name.
 
+4. Provide required variables. Copy the example tfvars file and fill it in:
+```bash
+cp terraform/environments/dev/terraform.tfvars.example terraform/environments/dev/terraform.tfvars
+# Edit terraform.tfvars and set alert_email to your address
+```
+
+5. Deploy the entire stack with a single apply:
+```bash
+cd terraform/environments/dev
+terraform init
+terraform plan
+terraform apply
+```
+
+The stages below describe what each module produces. They are deployed together by the single root module, not iteratively. The descriptions are organized by concern (KMS, then DynamoDB, etc.) for readability.
+
 ---
 
 ### Stage 00: Foundation
@@ -200,22 +223,6 @@ aws dynamodb create-table \
 - KMS aliases for each key
 
 **Files**: [terraform/modules/kms/](terraform/modules/kms/)
-
-**Deploy**:
-```bash
-cd terraform/environments/dev
-terraform init
-terraform plan
-terraform apply
-```
-
-**Outputs**:
-
-| Output | Description |
-|--------|-------------|
-| `dynamodb_key_arn` | ARN of the DynamoDB encryption key |
-| `s3_logs_key_arn` | ARN of the S3 logs encryption key |
-| `parameter_store_key_arn` | ARN of the Parameter Store encryption key |
 
 ---
 
@@ -281,8 +288,10 @@ terraform apply
 **Status**: ✅ Complete
 
 **What it creates**:
-- Bedrock Guardrails for PII filtering
-- IAM permissions for Bedrock access
+- Bedrock Guardrail with 7 PII entity types (BLOCK on SSN/credit card, ANONYMIZE on email/phone/name/address/ITIN)
+- Guardrail version pinned for stable Lambda invocation
+
+> Bedrock invocation permissions (`bedrock:InvokeModel`, `bedrock:ApplyGuardrail`) are granted in the Lambda IAM role (see Stage 04), not in this module.
 
 **Files**: [terraform/modules/bedrock/](terraform/modules/bedrock/)
 
@@ -306,8 +315,12 @@ terraform apply
 **Status**: ✅ Complete
 
 **What it creates**:
-- Athena database and workgroup
-- Saved queries for compliance reporting
+- Glue catalog database and external table over CloudTrail logs (with partition projection on date and region — no Glue crawler needed)
+- Athena workgroup with separate S3 bucket for query results (7-day lifecycle)
+- Three saved queries for compliance reporting:
+  - **`failed-access-attempts-7d`** — All AccessDenied / UnauthorizedAccess events in the last 7 days, with principal and source IP
+  - **`kms-decrypt-by-patient`** — KMS Decrypt operations grouped by patient_id (extracted from encryption context), useful for spotting abnormal access patterns to a specific patient's records
+  - **`root-account-usage`** — All actions performed by the root account in the last 30 days (should always return zero rows in a compliant environment)
 
 **Files**: [terraform/modules/athena/](terraform/modules/athena/)
 
@@ -415,11 +428,24 @@ Amazon Bedrock scans clinical notes for:
 
 ### Audit Logging
 
-CloudTrail captures all API calls including:
-- KMS key usage (encrypt, decrypt, generate data key)
-- DynamoDB operations (GetItem, PutItem, Query)
-- Bedrock invocations
-- Parameter Store access
+CloudTrail captures management events for all AWS API calls in the deployment region, plus data events for:
+- DynamoDB table operations (`AWS::DynamoDB::Table`)
+- S3 object operations (`AWS::S3::Object`)
+
+Captured management events include KMS encrypt/decrypt/`GenerateDataKey` calls, Parameter Store reads, IAM changes, and console sign-ins. Log file integrity validation is enabled, producing tamper-evident hash digests.
+
+## Limitations and Design Tradeoffs
+
+This project demonstrates technical safeguards in a portfolio context. Several intentional simplifications would not be appropriate for a real production deployment:
+
+- **API key authentication is sufficient for demo but not production.** A real patient portal would use a Cognito user pool or IAM auth so each request is tied to a specific authenticated user identity. API keys are bearer credentials with no per-user attribution.
+- **Single-region trail.** CloudTrail is configured for the deployment region only. Production HIPAA workloads typically use a multi-region or organization-wide trail with logs aggregated in a dedicated logging account.
+- **No WAF in front of the API.** API Gateway throttling and validation are useful but do not replace a Web Application Firewall for protection against scraping, abuse patterns, or geo-restriction.
+- **No multi-region DR.** DynamoDB and KMS keys are single-region. RTO/RPO objectives for actual healthcare data would typically require Global Tables and multi-region keys.
+- **No real Business Associate Agreement.** This is a personal portfolio project. AWS HIPAA-eligible service usage is meaningful only when paired with a signed BAA between the covered entity / business associate and AWS.
+- **No formal threat model or risk assessment.** Demonstrated controls are derived from common HIPAA technical safeguard interpretations, not from a documented risk assessment for a specific covered entity.
+
+These are deliberate scope decisions for a portfolio piece. Each one is a candidate for a follow-up project.
 
 ## Cost Estimate
 

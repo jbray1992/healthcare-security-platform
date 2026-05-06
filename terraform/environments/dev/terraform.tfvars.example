@@ -1,0 +1,4 @@
+# Required: email address that will receive SNS security alert notifications.
+# After terraform apply, AWS sends a one-time confirmation email — click the
+# link to start receiving alerts. Without confirmation, alerts go nowhere.
+alert_email = "you@example.com"
